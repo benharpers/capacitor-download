@@ -1,7 +1,14 @@
 import { WebPlugin } from '@capacitor/core';
-import { DownloadPlugin } from './definitions';
+import {
+  DownloadPlugin,
+  DownloadOptions,
+  DownloadResult,
+  DownloadDeleteOptions,
+  DownloadDeleteResult
+} from './definitions';
 
 export class DownloadWeb extends WebPlugin implements DownloadPlugin {
+
   constructor() {
     super({
       name: 'Download',
@@ -9,9 +16,14 @@ export class DownloadWeb extends WebPlugin implements DownloadPlugin {
     });
   }
 
-  async echo(options: { value: string }): Promise<{value: string}> {
-    console.log('ECHO', options);
-    return options;
+  get(options: DownloadOptions): Promise<DownloadResult> {
+
+    return Promise.resolve(options.url);
+  }
+
+  delete(options: DownloadDeleteOptions): Promise<DownloadDeleteResult> {
+
+    return Promise.resolve(true);
   }
 }
 
