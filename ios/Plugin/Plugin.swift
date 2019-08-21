@@ -4,7 +4,11 @@ import Capacitor
 @objc(Download)
 public class Download: CAPPlugin {
 
-  let DEFAULT_DIRECTORY = "DOCUMENTS"
+  var DEFAULT_DIRECTORY = "DOCUMENTS"
+
+  var DEFAULT_PREFIX = "download-"
+
+  var DEFAULT_DAYS = 1
 
   /**
    * Get the SearchPathDirectory corresponding to the JS string
@@ -54,16 +58,20 @@ public class Download: CAPPlugin {
       return
     }
 
+    let prefix = call.get("prefix", String.self, DEFAULT_PREFIX)!
+
     guard let path = call.get("path", String.self) else {
       handleError(call, "path must be provided and must be a string.")
       return
     }
 
     let directoryOption = call.get("directory", String.self, DEFAULT_DIRECTORY)!
-    guard let fileUrl = getFileUrl(path, directoryOption) else {
+    guard let fileUrl = getFileUrl(prefix + path, directoryOption) else {
       handleError(call, "Invalid path")
       return
     }
+
+    self.run_gc();
 
     if FileManager.default.fileExists(atPath: fileUrl.path) {
 
@@ -102,6 +110,7 @@ public class Download: CAPPlugin {
           call.success([
             "uri": fileUrl.absoluteString
           ])
+
         } catch {
 
           call.success([
@@ -120,17 +129,81 @@ public class Download: CAPPlugin {
   }
 
   /**
-   * Delete a file.
+   * Set defaults.
+   */
+  @objc func defaults(_ call: CAPPluginCall) {
+
+    DEFAULT_PREFIX = call.get("prefix", String.self, DEFAULT_PREFIX)!
+
+    DEFAULT_DIRECTORY = call.get("directory", String.self, DEFAULT_DIRECTORY)!
+
+    DEFAULT_DAYS = call.get("days", Int.self, DEFAULT_DAYS)!
+  }
+
+  /**
+   * Garbage collect old files.
+   */
+  @objc func gc(_ call: CAPPluginCall) {
+
+    run_gc()
+
+    call.success()
+  }
+
+  var busy = false
+
+  /**
+   * Garbage collect old files.
+   */
+  func run_gc() {
+
+    if (busy) { return }
+    busy = true
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+
+      let fileUrl = self.getFileUrl("", self.DEFAULT_DIRECTORY)!
+
+      do {
+        let directoryContents = try FileManager.default.contentsOfDirectory(at: fileUrl, includingPropertiesForKeys: [.contentAccessDateKey], options: [])
+
+        let downloads = directoryContents.filter {
+          $0.lastPathComponent.range(of: "^\(self.DEFAULT_PREFIX)", options: [.regularExpression, .caseInsensitive, .diacriticInsensitive]) != nil
+        }
+
+        for file in downloads
+        {
+          let adate = try file.resourceValues(forKeys: [.contentAccessDateKey]).contentAccessDate!
+
+          let days = Calendar.current.dateComponents([.day], from: adate, to: Date()).day!
+
+          if (days > self.DEFAULT_DAYS) {
+
+            try FileManager.default.removeItem(atPath: file.path)
+
+            print("Removed old download at \(file.path) last accessed \(days) days ago")
+          }
+        }
+      } catch { }
+
+      self.busy = false
+    }
+  }
+
+  /**
+   * Delete a download.
    */
   @objc func delete(_ call: CAPPluginCall) {
 
-    guard let file = call.get("path", String.self) else {
+    let prefix = call.get("prefix", String.self, DEFAULT_PREFIX)!
+
+    guard let path = call.get("path", String.self) else {
       handleError(call, "path must be provided and must be a string.")
       return
     }
 
-    let directoryOption = call.get("directory", String.self) ?? DEFAULT_DIRECTORY
-    guard let fileUrl = getFileUrl(file, directoryOption) else {
+    let directoryOption = call.get("directory", String.self, DEFAULT_DIRECTORY)!
+    guard let fileUrl = getFileUrl(prefix + path, directoryOption) else {
       handleError(call, "Invalid path")
       return
     }
@@ -145,5 +218,4 @@ public class Download: CAPPlugin {
       handleError(call, error.localizedDescription, error)
     }
   }
-
 }
