@@ -66,7 +66,7 @@ public class Download: CAPPlugin {
     }
 
     let directoryOption = call.get("directory", String.self, DEFAULT_DIRECTORY)!
-    guard let fileUrl = getFileUrl(prefix + path, directoryOption) else {
+    guard var fileUrl = getFileUrl(prefix + path, directoryOption) else {
       handleError(call, "Invalid path")
       return
     }
@@ -84,6 +84,19 @@ public class Download: CAPPlugin {
         } catch {}
 
       } else {
+
+        var resourceValues: URLResourceValues = URLResourceValues.init()
+
+        resourceValues.contentAccessDate = Date()
+
+        do {
+
+          try fileUrl.setResourceValues(resourceValues)
+
+        } catch {
+
+          print("Couldn't touch date of \(fileUrl.path)")
+        }
 
         call.success([
           "uri": fileUrl.absoluteString
